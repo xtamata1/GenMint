@@ -1,0 +1,5 @@
+{
+  "name": "NFT GenMint",
+  "description": "A comprehensive, client-side NFT collection generator and minting dashboard for Cronos.",
+  "requestFramePermissions": []
+}
