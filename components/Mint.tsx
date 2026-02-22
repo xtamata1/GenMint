@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { Wallet, AlertCircle, CheckCircle2, Loader2, ExternalLink, Copy, Check, Ticket, Code2, UploadCloud, FileJson, Package, Hammer, RefreshCw, Database } from 'lucide-react';
-import { CRONOS_CHAIN_ID } from '../constants';
+import { CRONOS_CHAIN_ID, CRONOS_RPC_URL } from '../constants';
 import { GeneratedNFT, CollectionSettings } from '../types';
 import { STANDARD_ERC721A_ABI, STANDARD_ERC721A_BYTECODE } from '../contracts/StandardERC721A';
 import JSZip from 'jszip';
@@ -45,6 +45,7 @@ export const Mint: React.FC<MintProps> = ({ collection, settings }) => {
   const [contractAddress, setContractAddress] = useState('');
   const [account, setAccount] = useState('');
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
+  const [readProvider, setReadProvider] = useState<ethers.JsonRpcProvider | null>(null);
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [supply, setSupply] = useState(0);
   const [maxSupply, setMaxSupply] = useState(0);
@@ -64,6 +65,17 @@ export const Mint: React.FC<MintProps> = ({ collection, settings }) => {
   const [newBaseUri, setNewBaseUri] = useState('');
 
   useEffect(() => {
+    // Initialize read-only provider for global access
+    try {
+        // Pass static network to avoid "failed to detect network" errors on startup
+        // Cronos Mainnet: Chain ID 25
+        const network = ethers.Network.from({ chainId: CRONOS_CHAIN_ID, name: 'cronos' });
+        const rp = new ethers.JsonRpcProvider(CRONOS_RPC_URL, network, { staticNetwork: network });
+        setReadProvider(rp);
+    } catch (e) {
+        console.error("Failed to init read provider", e);
+    }
+
     if ((window as any).ethereum) {
       setProvider(new ethers.BrowserProvider((window as any).ethereum));
     }
@@ -163,6 +175,13 @@ export const Mint: React.FC<MintProps> = ({ collection, settings }) => {
       alert("Please connect your wallet first.");
       return;
     }
+
+    // Check for placeholder bytecode
+    if (!STANDARD_ERC721A_BYTECODE || STANDARD_ERC721A_BYTECODE.length < 500) {
+        alert("Deployment Failed: The contract bytecode is a placeholder. You must compile the contract (e.g. in Remix) and update 'src/contracts/StandardERC721A.ts' with the real bytecode before deploying.");
+        return;
+    }
+
     setLoading(true);
     try {
       // Note: Using placeholder bytecode. In production, use real compiled bytecode.
@@ -460,24 +479,86 @@ main().catch((error) => {
     }
   };
 
+  useEffect(() => {
+      if (ethers.isAddress(contractAddress)) {
+          loadContractData();
+      }
+  }, [contractAddress, provider]);
+
   const loadContractData = async () => {
-    if (!ethers.isAddress(contractAddress) || !provider) return;
+    if (!ethers.isAddress(contractAddress)) return;
+    
+    // Prefer readProvider for reading data to ensure global access, fallback to wallet provider
+    let activeProvider = readProvider || provider;
+    if (!activeProvider) return;
+
     setLoading(true);
+    setErrorMsg('');
     try {
-      const contract = new ethers.Contract(contractAddress, ABI, provider);
-      const ts = await contract.totalSupply();
-      const ms = await contract.maxSupply();
-      const c = await contract.cost();
-      const p = await contract.paused();
+      // Try fetching code to verify connectivity and contract existence
+      let code;
+      try {
+          code = await activeProvider.getCode(contractAddress);
+      } catch (err) {
+          console.warn("Read provider failed, falling back to wallet provider if available", err);
+          if (readProvider && provider) {
+              activeProvider = provider;
+              code = await activeProvider.getCode(contractAddress);
+          } else {
+              throw err;
+          }
+      }
+
+      if (code === '0x') {
+          throw new Error("No contract found at this address");
+      }
+      // Placeholder bytecode is usually very small (< 300 bytes)
+      // Real ERC721A is usually > 5KB
+      if (code.length < 500) {
+          console.warn("Contract bytecode is too small:", code);
+          throw new Error("This contract seems to be invalid or a placeholder. Please redeploy with real bytecode.");
+      }
+
+      const contract = new ethers.Contract(contractAddress, ABI, activeProvider);
       
+      // Use Promise.allSettled to prevent one failure from breaking everything
+      const [tsResult, msResult, cResult, pResult] = await Promise.allSettled([
+          contract.totalSupply(),
+          contract.maxSupply(),
+          contract.cost(),
+          contract.paused()
+      ]);
+
+      const ts = tsResult.status === 'fulfilled' ? tsResult.value : BigInt(0);
+      const ms = msResult.status === 'fulfilled' ? msResult.value : BigInt(0);
+      const c = cResult.status === 'fulfilled' ? cResult.value : BigInt(0);
+      const p = pResult.status === 'fulfilled' ? pResult.value : false;
+      
+      const loadedCost = ethers.formatEther(c);
+
+      // Validate that the loaded mint price matches the mint price displayed in the UI
+      // We ignore the initial '0' state as that's the default before loading
+      if (cost !== '0' && Math.abs(Number(cost) - Number(loadedCost)) > 0.000001) {
+          alert(`Price Mismatch Detected: The displayed price (${cost} CRO) does not match the actual contract price (${loadedCost} CRO). The UI will be updated.`);
+      }
+
       setSupply(Number(ts));
       setMaxSupply(Number(ms));
-      setCost(ethers.formatEther(c));
+      setCost(loadedCost);
       setPaused(p);
-    } catch (e) {
+
+      if (tsResult.status === 'rejected' && msResult.status === 'rejected') {
+          console.warn("Contract calls failed. It might not be a valid ERC721A instance.");
+          setErrorMsg("Contract found but failed to read data. It might not be a compatible ERC721A.");
+      } else {
+          // Success
+          setStatus('idle');
+      }
+
+    } catch (e: any) {
       console.error("Error reading contract", e);
       setStatus('error');
-      setErrorMsg("Failed to load contract data. Ensure you are on Cronos.");
+      setErrorMsg(e.message || "Failed to load contract data.");
     } finally {
       setLoading(false);
     }
@@ -485,14 +566,54 @@ main().catch((error) => {
 
   const mint = async () => {
     if (!signer || !contractAddress) return;
+    
+    // Pre-flight checks
+    if (paused) {
+        alert("Minting is currently paused by the owner.");
+        return;
+    }
+    if (maxSupply > 0 && supply + mintAmount > maxSupply) {
+        alert(`Exceeds max supply. Only ${maxSupply - supply} remaining.`);
+        return;
+    }
+
     setStatus('idle');
     setLoading(true);
     setMintedIds([]);
+    setErrorMsg('');
+
     try {
       const contract = new ethers.Contract(contractAddress, ABI, signer);
-      const value = ethers.parseEther((Number(cost) * mintAmount).toString());
       
-      const tx = await contract.mint(mintAmount, { value });
+      // Safer value calculation using BigInt
+      // cost is a string in Ether (e.g., "10.0")
+      const costWei = ethers.parseEther(cost);
+      const totalCostWei = costWei * BigInt(mintAmount);
+
+      // Check user balance
+      if (provider) {
+          const balance = await provider.getBalance(await signer.getAddress());
+          if (balance < totalCostWei) {
+              throw new Error(`Insufficient funds. You need ${ethers.formatEther(totalCostWei)} CRO + Gas, but you have ${ethers.formatEther(balance)} CRO.`);
+          }
+      }
+
+      // Estimate gas first to catch errors early
+      try {
+          await contract.mint.estimateGas(mintAmount, { value: totalCostWei });
+      } catch (gasError: any) {
+          console.error("Gas estimation failed:", gasError);
+          // If gas estimation fails, it's usually a revert condition
+          let reason = "Transaction would fail. ";
+          if (gasError.message.includes("insufficient funds")) reason += "Insufficient funds for gas. ";
+          else if (gasError.message.includes("paused")) reason += "Minting is paused. ";
+          else if (gasError.message.includes("exceeds")) reason += "Exceeds max supply or wallet limit. ";
+          else reason += "Check contract limits (paused, max supply, etc).";
+          
+          throw new Error(reason);
+      }
+      
+      const tx = await contract.mint(mintAmount, { value: totalCostWei });
       setTxHash(tx.hash);
       
       const receipt = await tx.wait();
@@ -518,7 +639,12 @@ main().catch((error) => {
     } catch (e: any) {
       console.error(e);
       setStatus('error');
-      setErrorMsg(e.reason || e.message || "Mint failed");
+      // Extract meaningful error message
+      let msg = e.reason || e.message || "Mint failed";
+      if (msg.includes("user rejected")) msg = "Transaction rejected by user.";
+      else if (msg.includes("insufficient funds")) msg = "Insufficient funds for transaction.";
+      
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -926,7 +1052,7 @@ contract ${settings.symbol.replace(/[^a-zA-Z0-9]/g, '') || 'MyNFT'} is ERC721A, 
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-moon-card to-transparent"></div>
                     <div className="absolute bottom-6 left-8">
-                        <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">Black Moon Mint</h1>
+                        <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">BlackMarket NFT's Mint</h1>
                         <p className="text-moon-accent font-medium mt-1">Live on Cronos Mainnet</p>
                     </div>
                 </div>

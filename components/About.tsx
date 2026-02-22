@@ -11,7 +11,7 @@ export const About: React.FC = () => {
           The No-Code NFT Forge
         </h1>
         <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-          NFT GenMint is a completely client-side tool to generate, manage, and mint NFT collections on the Cronos blockchain without needing a backend server.
+          BlackMarket NFT's is a completely client-side tool to generate, manage, and mint NFT collections on the Cronos blockchain without needing a backend server.
         </p>
       </div>
 

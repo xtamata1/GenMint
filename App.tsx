@@ -105,7 +105,7 @@ const App: React.FC = () => {
           <div className="w-8 h-8 bg-gradient-to-br from-moon-card to-moon-accent rounded-lg flex items-center justify-center text-white font-bold border border-moon-border shadow-lg shadow-moon-accent/20">
             <Moon size={20} />
           </div>
-          <h1 className="text-xl font-bold text-white hidden md:block">NFT GenMint</h1>
+          <h1 className="text-xl font-bold text-white hidden md:block">BlackMarket NFT's</h1>
         </div>
 
         <div className="flex items-center bg-moon-card/50 p-1 rounded-lg border border-moon-border">

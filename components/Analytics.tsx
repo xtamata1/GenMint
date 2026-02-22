@@ -302,6 +302,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
 
     setIsDeploying(true);
     try {
+        if (!STANDARD_ERC721A_BYTECODE || STANDARD_ERC721A_BYTECODE === "0x") {
+            throw new Error("Contract bytecode is missing. Please ensure contracts are compiled.");
+        }
+
         const factory = new ethers.ContractFactory(STANDARD_ERC721A_ABI, STANDARD_ERC721A_BYTECODE, signer);
         
         // Deploy with default settings (can be customized if we passed settings prop, but using defaults for quick deploy)
@@ -320,7 +324,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
         alert(`Contract deployed successfully to ${address}`);
     } catch (e: any) {
         console.error(e);
-        alert("Deployment failed: " + (e.reason || e.message));
+        let msg = e.reason || e.message;
+        if (msg.includes("execution reverted")) {
+            msg = "Transaction failed. Likely due to insufficient funds or gas estimation error. Ensure you have enough CRO on Cronos Mainnet.";
+        }
+        alert("Deployment failed: " + msg);
     } finally {
         setIsDeploying(false);
     }
@@ -571,7 +579,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
           return (
             <div key={traitType} className="bg-card p-4 rounded-xl border border-gray-700">
               <h3 className="text-lg font-bold text-white mb-4 capitalize">{traitType} Rarity</h3>
-              <div className="h-64">
+              <div className="h-64 w-full min-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
                     <XAxis type="number" hide />
