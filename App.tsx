@@ -33,6 +33,8 @@ const App: React.FC = () => {
   const [collection, setCollection] = useState<GeneratedNFT[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [ipfsGateway, setIpfsGateway] = useState('');
+  const [imageCid, setImageCid] = useState('');
 
   const handleGenerate = async () => {
     if (layers.some(l => l.traits.length === 0)) {
@@ -76,10 +78,15 @@ const App: React.FC = () => {
       const base64Data = nft.image.split(',')[1];
       images?.file(`${nft.id}.png`, base64Data, { base64: true });
       
+      // Use IPFS URL if gateway and CID are provided, otherwise use placeholder
+      const imageUrl = (ipfsGateway && imageCid) 
+        ? `${ipfsGateway.replace(/\/$/, '')}/${imageCid}/${nft.id}.png`
+        : `ipfs://REPLACE_WITH_CID/${nft.id}.png`;
+
       const meta = {
         name: nft.name,
         description: nft.description,
-        image: `ipfs://REPLACE_WITH_CID/${nft.id}.png`,
+        image: imageUrl,
         attributes: nft.attributes,
         dna: nft.dna,
       };
@@ -88,7 +95,7 @@ const App: React.FC = () => {
 
       // Add to CSV
       const attributesString = nft.attributes.map(a => `${a.trait_type}:${a.value}`).join(';');
-      csvContent += `${nft.id},"${nft.name}","${nft.description}",${nft.dna},ipfs://REPLACE_WITH_CID/${nft.id}.png,"${attributesString}"\n`;
+      csvContent += `${nft.id},"${nft.name}","${nft.description}",${nft.dna},${imageUrl},"${attributesString}"\n`;
     });
 
     zip.file("collection.csv", csvContent);
@@ -102,8 +109,8 @@ const App: React.FC = () => {
       {/* Navigation */}
       <nav className="fixed top-0 inset-x-0 bg-moon-bg/80 backdrop-blur-lg border-b border-moon-border z-50 h-16 flex items-center justify-between px-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-moon-card to-moon-accent rounded-lg flex items-center justify-center text-white font-bold border border-moon-border shadow-lg shadow-moon-accent/20">
-            <Moon size={20} />
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden border border-moon-border shadow-lg shadow-moon-accent/20">
+            <img src="https://github.com/xtamata1/GenMint/blob/main/logo.png?raw=true" alt="Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-xl font-bold text-white hidden md:block">BlackMarket NFT's</h1>
         </div>
@@ -220,9 +227,30 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === Tab.GALLERY && <Gallery collection={collection} />}
-        {activeTab === Tab.ANALYTICS && <Analytics collection={collection} />}
-        {activeTab === Tab.MINT && <Mint collection={collection} settings={settings} />}
+        {activeTab === Tab.GALLERY && (
+          <Gallery 
+            collection={collection} 
+            ipfsGateway={ipfsGateway}
+            imageCid={imageCid}
+          />
+        )}
+        {activeTab === Tab.ANALYTICS && (
+          <Analytics 
+            collection={collection} 
+            ipfsGateway={ipfsGateway}
+            setIpfsGateway={setIpfsGateway}
+            imageCid={imageCid}
+            setImageCid={setImageCid}
+          />
+        )}
+        {activeTab === Tab.MINT && (
+          <Mint 
+            collection={collection} 
+            settings={settings} 
+            imageCid={imageCid}
+            setImageCid={setImageCid}
+          />
+        )}
         {activeTab === Tab.ABOUT && <About />}
       </main>
 

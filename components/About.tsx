@@ -44,8 +44,8 @@ export const About: React.FC = () => {
             </div>
           </div>
           
-          <div className="w-32 h-32 bg-moon-accent/10 rounded-full flex items-center justify-center border-2 border-moon-accent/30 shadow-[0_0_30px_rgba(56,189,248,0.3)]">
-             <span className="text-4xl font-bold text-moon-accent">BMN</span>
+          <div className="w-32 h-32 bg-moon-accent/10 rounded-full flex items-center justify-center border-2 border-moon-accent/30 shadow-[0_0_30px_rgba(56,189,248,0.3)] overflow-hidden">
+             <img src="https://github.com/xtamata1/GenMint/blob/main/logo.png?raw=true" alt="BlackmoonCRO Logo" className="w-full h-full object-cover" />
           </div>
         </div>
       </div>

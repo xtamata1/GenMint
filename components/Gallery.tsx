@@ -5,15 +5,26 @@ import saveAs from 'file-saver';
 
 interface GalleryProps {
   collection: GeneratedNFT[];
+  ipfsGateway?: string;
+  imageCid?: string;
 }
 
-export const Gallery: React.FC<GalleryProps> = ({ collection }) => {
+export const Gallery: React.FC<GalleryProps> = ({ collection, ipfsGateway, imageCid }) => {
   const [search, setSearch] = useState('');
 
   const filtered = collection.filter(nft => 
     nft.name.toLowerCase().includes(search.toLowerCase()) || 
     nft.attributes.some(a => a.value.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const getImageUrl = (nft: GeneratedNFT) => {
+    if (ipfsGateway && imageCid) {
+        // Ensure gateway ends with slash
+        const gateway = ipfsGateway.endsWith('/') ? ipfsGateway : `${ipfsGateway}/`;
+        return `${gateway}${imageCid}/${nft.id}.png`;
+    }
+    return nft.image;
+  };
 
   const downloadNFT = (nft: GeneratedNFT) => {
     saveAs(nft.image, `${nft.name.replace(/\s/g, '_')}.png`);
@@ -44,7 +55,15 @@ export const Gallery: React.FC<GalleryProps> = ({ collection }) => {
           {filtered.map(nft => (
             <div key={nft.id} className="bg-card rounded-xl overflow-hidden border border-gray-700 hover:border-accent transition-colors group">
               <div className="relative aspect-square">
-                <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
+                <img 
+                    src={getImageUrl(nft)} 
+                    alt={nft.name} 
+                    className="w-full h-full object-cover" 
+                    onError={(e) => {
+                        // Fallback to local image if IPFS fails
+                        (e.target as HTMLImageElement).src = nft.image;
+                    }}
+                />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button 
                     onClick={() => downloadNFT(nft)}
@@ -53,6 +72,17 @@ export const Gallery: React.FC<GalleryProps> = ({ collection }) => {
                   >
                     <Download size={16} />
                   </button>
+                  {ipfsGateway && imageCid && (
+                      <a 
+                        href={getImageUrl(nft)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 bg-moon-accent text-black rounded-full hover:bg-sky-400"
+                        title="View on IPFS"
+                      >
+                        <ExternalLink size={16} />
+                      </a>
+                  )}
                 </div>
               </div>
               <div className="p-3">

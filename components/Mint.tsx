@@ -27,13 +27,15 @@ const ABI = [
 interface MintProps {
   collection: GeneratedNFT[];
   settings: CollectionSettings;
+  imageCid: string;
+  setImageCid: (cid: string) => void;
 }
 
-export const Mint: React.FC<MintProps> = ({ collection, settings }) => {
+export const Mint: React.FC<MintProps> = ({ collection, settings, imageCid, setImageCid }) => {
   const [mode, setMode] = useState<'creator' | 'public'>('creator');
   
   // Creator State
-  const [imageCid, setImageCid] = useState('');
+  // Removed local imageCid state
   const [uploadProvider, setUploadProvider] = useState<'pinata' | 'nftstorage'>('pinata');
   const [pinataJwt, setPinataJwt] = useState('');
   const [nftStorageKey, setNftStorageKey] = useState('');

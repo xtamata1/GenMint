@@ -9,9 +9,13 @@ import { CRONOS_CHAIN_ID } from '../constants';
 
 interface AnalyticsProps {
   collection: GeneratedNFT[];
+  ipfsGateway: string;
+  setIpfsGateway: (url: string) => void;
+  imageCid: string;
+  setImageCid: (cid: string) => void;
 }
 
-export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
+export const Analytics: React.FC<AnalyticsProps> = ({ collection, ipfsGateway, setIpfsGateway, imageCid, setImageCid }) => {
   const [uploadProvider, setUploadProvider] = useState<'pinata' | 'nftstorage'>('pinata');
   const [pinataJwt, setPinataJwt] = useState('');
   const [nftStorageKey, setNftStorageKey] = useState('');
@@ -105,7 +109,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
         imageUploadXhr.onerror = () => reject(new Error("Network error during image upload"));
         imageUploadXhr.send(imageFormData);
       }).then(async (response: any) => {
-        const imageCid = response.IpfsHash;
+        const uploadedImageCid = response.IpfsHash;
+        setImageCid(uploadedImageCid); // Update global state
         
         // 2. Upload Metadata
         setUploadStatus('uploading_metadata');
@@ -118,7 +123,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
           const meta = {
             name: nft.name,
             description: nft.description,
-            image: `ipfs://${imageCid}/${nft.id}.png`,
+            image: `ipfs://${uploadedImageCid}/${nft.id}.png`,
             attributes: nft.attributes,
             dna: nft.dna,
           };
@@ -193,7 +198,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
 
       setUploadStatus('uploading_images');
       // Note: storeDirectory returns the CID of the directory
-      const imageCid = await client.storeDirectory(imageFiles);
+      const uploadedImageCid = await client.storeDirectory(imageFiles);
+      setImageCid(uploadedImageCid); // Update global state
       
       // 2. Upload Metadata Directory
       setUploadStatus('uploading_metadata');
@@ -202,7 +208,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
          const meta = {
             name: nft.name,
             description: nft.description,
-            image: `ipfs://${imageCid}/${nft.id}.png`,
+            image: `ipfs://${uploadedImageCid}/${nft.id}.png`,
             attributes: nft.attributes,
             dna: nft.dna,
           };
@@ -364,6 +370,38 @@ export const Analytics: React.FC<AnalyticsProps> = ({ collection }) => {
             >
                 <FileJson size={14} className="text-green-400" /> Validate Metadata
             </button>
+        </div>
+
+        {/* IPFS Gateway Configuration */}
+        <div className="mb-6 bg-black/30 p-4 rounded-lg border border-moon-border">
+            <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                <ExternalLink size={14} className="text-moon-accent" /> IPFS Gateway Configuration
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">
+                Enter an IPFS gateway URL (e.g., <code>https://ipfs.io/ipfs/</code> or <code>https://gateway.pinata.cloud/ipfs/</code>) to preview your images using the IPFS CID.
+            </p>
+            <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">IPFS Gateway URL</label>
+                    <input 
+                        type="text" 
+                        placeholder="https://ipfs.io/ipfs/"
+                        value={ipfsGateway}
+                        onChange={(e) => setIpfsGateway(e.target.value)}
+                        className="w-full bg-moon-bg border border-moon-border rounded-lg px-3 py-2 text-white text-sm focus:border-moon-accent focus:outline-none"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Image CID (Auto-filled after upload)</label>
+                    <input 
+                        type="text" 
+                        placeholder="Qm..."
+                        value={imageCid}
+                        onChange={(e) => setImageCid(e.target.value)}
+                        className="w-full bg-moon-bg border border-moon-border rounded-lg px-3 py-2 text-white text-sm focus:border-moon-accent focus:outline-none"
+                    />
+                </div>
+            </div>
         </div>
 
         {/* Provider Switcher */}
